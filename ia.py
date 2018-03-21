@@ -1,19 +1,7 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-'''Images binary classifier based on scikit-learn SVM classifier.
-It uses the RGB color space as feature vector.
-'''
-
 from __future__ import division
-from __future__ import print_function
 from PIL import Image
-from sklearn import cross_validation
-from sklearn import grid_search
 from sklearn import svm
-from sklearn import metrics
 from StringIO import StringIO
-from urlparse import urlparse
-import urllib2
 import sys
 import os
 
@@ -54,34 +42,6 @@ def process_image_file(image_path):
     except IOError:
         return None
 
-
-def process_image_url(image_url):
-    '''Given an image URL it returns its feature vector
-
-    Args:
-      image_url (str): url of the image to process.
-
-    Returns:
-      list of float: feature vector.
-
-    Raises:
-      Any exception raised by urllib2 requests.
-
-      IOError: if the URL does not point to a valid file.
-    '''
-    parsed_url = urlparse(image_url)
-    request = urllib2.Request(image_url)
-    # set a User-Agent and Referer to work around servers that block a typical
-    # user agents and hotlinking. Sorry, it's for science!
-    request.add_header('User-Agent', 'Mozilla/5.0 (X11; Ubuntu; Linux ' \
-            'x86_64; rv:31.0) Gecko/20100101 Firefox/31.0')
-    request.add_header('Referrer', parsed_url.netloc)
-    # Wrap network data in StringIO so that it looks like a file
-    net_data = StringIO(urllib2.build_opener().open(request).read())
-    image = Image.open(net_data)
-    return process_image(image)
-
-
 def process_image(image, blocks=4):
     '''Given a PIL Image object it returns its feature vector.
 
@@ -105,14 +65,6 @@ def process_image(image, blocks=4):
         feature[idx] += 1
         pixel_count += 1
     return [x/pixel_count for x in feature]
-
-
-def show_usage():
-    '''Prints how to use this program
-    '''
-    print("Usage: %s [class A images directory] [class B images directory]" %
-            sys.argv[0])
-    sys.exit(1)
 
 
 def train(training_path_a, training_path_b, print_metrics=True):
@@ -141,24 +93,10 @@ def train(training_path_a, training_path_b, print_metrics=True):
     # target is the list of target classes for each feature vector: a '1' for
     # class A and '0' for class B
     target = [0] * len(training_a) + [1] * len(training_b)
-    # split training data in a train set and a test set. The test set will
-    # containt 20% of the total
-    x_train, x_test, y_train, y_test = cross_validation.train_test_split(data,
-            target, test_size=0.20)
-    # define the parameter search space
-    parameters = {'kernel': ['linear', 'rbf'], 'C': [1, 10, 100, 1000],
-            'gamma': [0.01, 0.001, 0.0001]}
+
     # search for the best classifier within the search space and return it
-    clf = grid_search.GridSearchCV(svm.SVC(), parameters).fit(x_train, y_train)
-    classifier = clf.best_estimator_
-    if print_metrics:
-        print()
-        print('Parameters:', clf.best_params_)
-        print()
-        print('Best classifier score')
-        print(metrics.classification_report(y_test,
-            classifier.predict(x_test)))
-    return classifier
+    clf = svm.SVC(gamma=0.001, C=100.).fit(data, target)
+    return clf
 
 
 def main(training_path_a, training_path_b):
@@ -171,26 +109,27 @@ def main(training_path_a, training_path_b):
     '''
     print('Training classifier...')
     classifier = train(training_path_a, training_path_b)
+    print('Ready to predict')
     while True:
         try:
-            print("Input an image url (enter to exit): "),
+            print("Input an image path: "),
             image_url = raw_input()
             if not image_url:
                 break
-            features = process_image_url(image_url)
+            features = [process_image_file(image_url)]
             if (classifier.predict(features) == 0):
                 print(training_path_a)
             else:
                 print(training_path_b)
-            #print(classifier.predict(features))
         except (KeyboardInterrupt, EOFError):
             break
-        except:
-            exception = sys.exc_info()[0]
-            print(exception)
+        except Exception as e:
+            print(e)
 
 
 if __name__ == '__main__':
     if len(sys.argv) != 3:
-        show_usage()
+        print("Usage: %s [class A images directory] [class B images directory]" %
+            sys.argv[0])
+        sys.exit(1)
     main(sys.argv[1], sys.argv[2])
