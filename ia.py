@@ -2,6 +2,7 @@ from __future__ import division
 from PIL import Image
 from sklearn import svm
 from StringIO import StringIO
+import pickle
 import sys
 import os
 
@@ -99,6 +100,12 @@ def train(training_path_a, training_path_b, print_metrics=True):
     return clf
 
 
+def kb_interrupt_handler(classifier):
+    with open('classifier', 'wb') as clfFile:
+            pickle.dump(classifier, clfFile)
+    sys.exit(0)
+
+
 def main(training_path_a, training_path_b):
     '''Main function. Trains a classifier and allows to use it on images
     downloaded from the Internet.
@@ -107,9 +114,16 @@ def main(training_path_a, training_path_b):
       training_path_a (str): directory containing sample images of class A.
       training_path_b (str): directory containing sample images of class B.
     '''
-    print('Training classifier...')
-    classifier = train(training_path_a, training_path_b)
-    print('Ready to predict')
+    classifier = None
+    if os.path.isfile('classifier'):
+        print('Loading an existing classifier...')
+        with open('classifier', 'rb') as clfFile:
+            unpickler = pickle.Unpickler(clfFile)
+            classifier = unpickler.load()
+    else:
+        print('Training classifier...')
+        classifier = train(training_path_a, training_path_b)
+    print('Ready to predict...')
     while True:
         try:
             print("Input an image path: "),
@@ -122,7 +136,7 @@ def main(training_path_a, training_path_b):
             else:
                 print(training_path_b)
         except (KeyboardInterrupt, EOFError):
-            break
+            kb_interrupt_handler(classifier)
         except Exception as e:
             print(e)
 
